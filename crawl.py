@@ -80,6 +80,7 @@ async def start_crawl(client: httpx.AsyncClient, url: str) -> str:
 
 async def poll_job(client: httpx.AsyncClient, url: str) -> dict:
     start = time.monotonic()
+    poll_url = f"{url}?limit=1"
 
     while True:
         elapsed = time.monotonic() - start
@@ -87,7 +88,13 @@ async def poll_job(client: httpx.AsyncClient, url: str) -> dict:
             print(f"Error: Polling timed out after {POLL_TIMEOUT}s.")
             sys.exit(1)
 
-        resp = await client.get(url)
+        resp = await client.get(poll_url)
+
+        if resp.status_code == 404:
+            print(f"  [{elapsed:5.0f}s] Job not ready yet, retrying...")
+            await asyncio.sleep(POLL_INTERVAL)
+            continue
+
         resp.raise_for_status()
         data = resp.json()
         result = data["result"]
@@ -113,7 +120,7 @@ async def fetch_all_records(client: httpx.AsyncClient, url: str) -> list[dict]:
         if cursor is not None:
             params["cursor"] = cursor
 
-        resp = await client.get(url, params=params)
+        resp = await client.get(url, params=params, timeout=120)
         resp.raise_for_status()
         result = resp.json()["result"]
 
