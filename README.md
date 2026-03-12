@@ -2,6 +2,8 @@
 
 Script Python que utiliza a [Cloudflare Browser Rendering API (endpoint /crawl)](https://developers.cloudflare.com/browser-rendering/rest-api/crawl-endpoint/) para crawlear páginas de Market Data da B3, renderizando JavaScript via headless browser e exportando o conteúdo em Markdown.
 
+O endpoint `/crawl` foi lançado em open beta em 10 de março de 2026.
+
 ## O que faz
 
 1. Envia um job de crawl para a API da Cloudflare apontando para `https://www.b3.com.br/pt_br/market-data-e-indices/indices/`
@@ -83,9 +85,11 @@ Exemplo de saída:
 Starting crawl job...
 Job created: abc123-def456
 Polling for results...
-  [    0s] status=running  finished=0/15
-  [    5s] status=running  finished=3/15
-  [   10s] status=completed  finished=15/15
+  [    0s] Job not ready yet, retrying...
+  [    5s] Job not ready yet, retrying...
+  [   30s] status=running  finished=0/15
+  [   35s] status=running  finished=3/15
+  [   40s] status=completed  finished=15/15
 Fetching records...
 
 Saving files...
@@ -98,12 +102,24 @@ Succeeded:            12
 Skipped/disallowed:   2
 Errored:              1
 Browser time used:    45.3s
-Total elapsed:        25.1s
+Total elapsed:        75.1s
 Output dir:           /path/to/output
 ==================================================
 ```
 
-## Custos
+> **Nota:** Os valores acima são ilustrativos. O tempo total varia com a carga do edge da Cloudflare e a complexidade das páginas. O browser time é o tempo efetivo de renderização no headless browser; o elapsed inclui criação do job, polling e download dos records.
+
+## Gotchas
+
+Coisas que a documentação não deixa claras e que descobri testando:
+
+**Job retorna 404 nos primeiros ~30 segundos.** Depois de criar o job via POST, o GET com o job_id retorna 404 por um tempo até o job propagar internamente. O script já trata isso no polling (retry em loop), mas se você estiver escrevendo seu próprio client, precisa lidar com esse 404 como "ainda não está pronto" e não como erro real.
+
+**O cursor da paginação é offset-based.** A doc menciona `cursor` como parâmetro de paginação, o que sugere um token opaco. Na prática é um offset numérico: `cursor=0`, `cursor=10`, `cursor=20`. O script usa `offset += len(batch)` pra avançar.
+
+**O Markdown inclui lixo de navegação.** O output contém menus, rodapés, sidebars e todo o chrome do site junto com o conteúdo real. Não é conteúdo limpo pronto pra ingestão direta. Se o objetivo é alimentar um pipeline de RAG/LLM, vai precisar de pós-processamento pra extrair só o conteúdo relevante.
+
+## Custos e limites
 
 A Browser Rendering API cobra **$0.09 por hora** de uso de browser, com free tier:
 
@@ -112,7 +128,18 @@ A Browser Rendering API cobra **$0.09 por hora** de uso de browser, com free tie
 | Workers Free | 10 min/dia | 3 |
 | Workers Paid ($5/mês) | 10 horas/mês | 10 |
 
-Crawls com `render: true` (padrão deste script) consomem tempo de browser. Um crawl de 15 páginas tipicamente usa menos de 1 minuto de browser time.
+O endpoint `/crawl` tem limites adicionais no plano Free:
+
+| Limite | Workers Free | Workers Paid |
+|---|---|---|
+| Jobs por dia | 5 | Sem limite* |
+| Páginas por job | 100 | 100.000 |
+| Tempo máximo do job | 7 dias | 7 dias |
+| Retenção dos resultados | 14 dias | 14 dias |
+
+\* Sujeito ao limite de browser time do plano.
+
+Crawls com `render: true` (padrão deste script) consomem tempo de browser. Um crawl de 15 páginas tipicamente usa menos de 1 minuto de browser time. Com `render: false` é possível crawlear sites estáticos sem consumir browser time (gratuito durante o beta).
 
 ## Referências
 
