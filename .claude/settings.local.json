@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:developers.cloudflare.com)",
       "Bash(python3:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(source /Users/felipebossolani/Projects/Personal/cloudflare-crawler-test/.env && curl -s -w \"\\\\nHTTP_STATUS: %{http_code}\" \"https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/browser-rendering/crawl/c2019882-60ee-4e1f-8d0c-1d7f679df165?limit=1\" \\\\\n  -H \"Authorization: Bearer ${CLOUDFLARE_API_TOKEN}\" 2>&1 | head -200)"
     ]
   }
 }

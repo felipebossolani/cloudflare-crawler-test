@@ -111,15 +111,13 @@ async def poll_job(client: httpx.AsyncClient, url: str) -> dict:
 
 
 async def fetch_all_records(client: httpx.AsyncClient, url: str) -> list[dict]:
-    """Fetch all records using cursor pagination."""
+    """Fetch all records using offset-based cursor pagination."""
     records = []
-    cursor = None
+    offset = 0
+    page_size = 100
 
     while True:
-        params = {"limit": 100}
-        if cursor is not None:
-            params["cursor"] = cursor
-
+        params = {"limit": page_size, "cursor": offset}
         resp = await client.get(url, params=params, timeout=120)
         resp.raise_for_status()
         result = resp.json()["result"]
@@ -127,9 +125,10 @@ async def fetch_all_records(client: httpx.AsyncClient, url: str) -> list[dict]:
         batch = result.get("records", [])
         records.extend(batch)
 
-        cursor = result.get("cursor")
-        if cursor is None or not batch:
+        if len(batch) < page_size or result.get("cursor") is None:
             break
+
+        offset += len(batch)
 
     return records
 
